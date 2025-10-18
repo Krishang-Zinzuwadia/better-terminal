@@ -1,6 +1,5 @@
 # better-terminal
 
-better-terminal is a small Bash utility that colorizes piped text using a 6-digit hex color (truecolor / 24-bit). It's built to be simple, predictable, and easy to use in Omarchy Linux (and other modern Linux distributions).
 ```markdown
 # better-terminal
 
