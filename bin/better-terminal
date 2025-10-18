@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LIB_DIRS=(
+    "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" >/dev/null 2>&1 && pwd)"
+    "$HOME/.local/lib/better-terminal"
+    "/usr/local/lib/better-terminal"
+)
+FOUND_LIB=""
+for d in "${LIB_DIRS[@]}"; do
+    if [[ -f "$d/color.sh" ]]; then
+        FOUND_LIB="$d/color.sh"
+        break
+    fi
+done
+if [[ -n "$FOUND_LIB" ]]; then
+    source "$FOUND_LIB"
+else
+    echo "Missing library: color.sh (looked in: ${LIB_DIRS[*]})" >&2
+    exit 1
+fi
+
+DEFAULT_HEX="#75507B"
+HEX=""
+TRUECOLOR=0
+NUMERIC=""
+GRADIENT=""
+G1=""
+G2=""
+GRAD_DIR="left"
+UNIT="char"
+
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -t|--truecolor)
+            TRUECOLOR=1
+            shift
+            ;;
+        -c)
+            shift
+            HEX="$1"
+            shift
+            ;;
+        --gradient)
+            if (( $# < 3 )); then
+                echo "--gradient requires two color arguments (quote or escape leading # if used)." >&2
+                exit 1
+            fi
+            shift
+            GRADIENT=1
+            G1="${1-}"
+            shift
+            G2="${1-}"
+            shift
+            ;;
+        --direction)
+            if (( $# < 2 )); then
+                echo "--direction requires an argument: left|right|top|bottom" >&2
+                exit 1
+            fi
+            shift
+            GRAD_DIR="${1-}"
+            shift
+            ;;
+        -u|--unit)
+            if (( $# < 2 )); then
+                echo "--unit requires an argument: char|word" >&2
+                exit 1
+            fi
+            shift
+            UNIT="${1-}"
+            if [[ "$UNIT" != "char" && "$UNIT" != "word" ]]; then
+                echo "--unit must be 'char' or 'word'" >&2
+                exit 1
+            fi
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: <command> | $(basename "$0") [-t] [-c <hex>] | <hex>"
+            exit 0
+            ;;
+        *)
+            if [[ "$1" =~ ^#?[0-9A-Fa-f]{6}$ ]] || [[ "$1" =~ ^[0-9A-Fa-f]{3}$ ]] || [[ "$1" =~ ^[0-9]+$ ]]; then
+                HEX="$1"
+                shift
+            else
+                break
+            fi
+            ;;
+    esac
+done
+
+if [[ -z "$HEX" ]]; then
+    if [ -t 0 ]; then
+        echo "Pipe text into this command to color it."
+        echo "Usage: <command> | $(basename "$0") -c <hex_code>   OR   <command> | $(basename "$0") <hex_code>"
+        echo "Example: neofetch | $(basename "$0") #5E81AC"
+        exit 1
+    fi
+    HEX="$DEFAULT_HEX"
+fi
+
+if [[ "$HEX" =~ ^[0-9]+$ ]]; then
+    NUMERIC="$HEX"
+else
+    if ! validate_hex "$HEX"; then
+        echo "Invalid hex code" >&2
+        exit 2
+    fi
+fi
+
+if [[ "$TRUECOLOR" -eq 1 ]]; then
+    RGB="$(hex_to_rgb "$HEX")"
+    COLOR_START=$'\033[38;2;'
+    COLOR_START+="${RGB}"
+    COLOR_START+=$'m'
+    COLOR_END=$'\033[0m'
+else
+    if [[ "$HEX" =~ ^[0-9]+$ ]]; then
+        NUMERIC="$HEX"
+        if (( NUMERIC >= 30 && NUMERIC <= 37 )) || (( NUMERIC >= 90 && NUMERIC <= 97 )); then
+            COLOR_START=$'\033['
+            COLOR_START+="${NUMERIC}"
+            COLOR_START+=$'m'
+            COLOR_END=$'\033[0m'
+        elif (( NUMERIC >= 0 && NUMERIC <= 255 )); then
+            COLOR_START=$'\033[38;5;'
+            COLOR_START+="${NUMERIC}"
+            COLOR_START+=$'m'
+            COLOR_END=$'\033[0m'
+        else
+            echo "Numeric color out of range" >&2
+            exit 3
+        fi
+    else
+        ANSI_INDEX="$(hex_to_ansi256 "$HEX")"
+        COLOR_START=$'\033[38;5;'
+        COLOR_START+="${ANSI_INDEX}"
+        COLOR_START+=$'m'
+        COLOR_END=$'\033[0m'
+    fi
+fi
+
+if [[ -n "$GRADIENT" ]]; then
+    mapfile -t LINES
+    if [[ "$G1" =~ ^[0-9]+$ ]]; then
+        rgb_vals=$(numeric_to_rgb "$G1") || { echo "Invalid numeric color for gradient: $G1" >&2; exit 3; }
+        read -r R1 G1v B1 <<< "$rgb_vals"
+    else
+        n1=$(normalize_hex "$G1")
+        R1=$((16#${n1:0:2})); G1v=$((16#${n1:2:2})); B1=$((16#${n1:4:2}))
+    fi
+    if [[ "$G2" =~ ^[0-9]+$ ]]; then
+        rgb_vals=$(numeric_to_rgb "$G2") || { echo "Invalid numeric color for gradient: $G2" >&2; exit 3; }
+        read -r R2 G2v B2 <<< "$rgb_vals"
+    else
+        n2=$(normalize_hex "$G2")
+        R2=$((16#${n2:0:2})); G2v=$((16#${n2:2:2})); B2=$((16#${n2:4:2}))
+    fi
+
+    case "$GRAD_DIR" in
+        left)
+            for line in "${LINES[@]}"; do
+                if [[ "$UNIT" == "word" ]]; then
+                    awk -v R1="$R1" -v G1="$G1v" -v B1="$B1" -v R2="$R2" -v G2="$G2v" -v B2="$B2" -v TC="${TRUECOLOR}" -v DIR="left" \
+                        'BEGIN{ OFS="" } {
+                        line=$0; len=length(line);
+                        i=1;
+                        while(i<=len){
+                            c=substr(line,i,1);
+                            if(c ~ /[[:space:]]/){ printf "%s", c; i++; continue }
+                            start=i; while(i<=len && substr(line,i,1) !~ /[[:space:]]/) i++; end=i-1;
+                            for(k=start; k<=end; k++){
+                                if(len==1) t=0; else t=(k-1)/(len-1);
+                                r=int(R1 + (R2-R1)*t); g=int(G1 + (G2-G1)*t); b=int(B1 + (B2-B1)*t);
+                                ch=substr(line,k,1);
+                                if(TC==1){ printf "\033[38;2;%d;%d;%dm%s\033[0m", r,g,b,ch }
+                                else { rr=int(r/51); gg=int(g/51); bb=int(b/51); code=16+36*rr+6*gg+bb; printf "\033[38;5;%dm%s\033[0m", code, ch }
+                            }
+                        }
+                        print "" }' <<< "$line"
+                else
+                    len=${#line}
+                    for ((i=0;i<len;i++)); do
+                        t=$(awk -v i=$i -v l=$len 'BEGIN{print (l==1?0:i/(l-1))}')
+                        r=$(awk -v a=$R1 -v b=$R2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        if [[ "$TRUECOLOR" -eq 1 ]]; then
+                            printf '\033[38;2;%d;%d;%dm%s\033[0m' "$r" "$g" "$b" "${line:i:1}"
+                        else
+                            ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                            printf '\033[38;5;%dm%s\033[0m' "$ai" "${line:i:1}"
+                        fi
+                    done
+                    echo
+                fi
+            done
+            ;;
+        right)
+            for line in "${LINES[@]}"; do
+                if [[ "$UNIT" == "word" ]]; then
+                    read -r -a words <<< "$line"
+                    n=${#words[@]}
+                    if (( n == 0 )); then
+                        echo
+                        continue
+                    fi
+                    for ((i=0;i<n;i++)); do
+                        if (( n == 1 )); then
+                            t=0
+                        else
+                            t=$(awk -v i=$i -v n=$n 'BEGIN{print 1 - i/(n-1)}')
+                        fi
+                        r=$(awk -v a=$R1 -v b=$R2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        if [[ "$TRUECOLOR" -eq 1 ]]; then
+                            printf '\033[38;2;%d;%d;%dm%s\033[0m' "$r" "$g" "$b" "${words[i]}"
+                        else
+                            ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                            printf '\033[38;5;%dm%s\033[0m' "$ai" "${words[i]}"
+                        fi
+                        if (( i < n-1 )); then
+                            printf ' '
+                        fi
+                    done
+                    echo
+                else
+                    len=${#line}
+                    for ((i=0;i<len;i++)); do
+                        t=$(awk -v i=$i -v l=$len 'BEGIN{print (l==1?0:i/(l-1))}')
+                        t=$(awk -v t=$t 'BEGIN{print 1-t}')
+                        r=$(awk -v a=$R1 -v b=$R2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        if [[ "$TRUECOLOR" -eq 1 ]]; then
+                            printf '\033[38;2;%d;%d;%dm%s\033[0m' "$r" "$g" "$b" "${line:i:1}"
+                        else
+                            ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                            printf '\033[38;5;%dm%s\033[0m' "$ai" "${line:i:1}"
+                        fi
+                    done
+                    echo
+                fi
+            done
+            ;;
+        top)
+            total=${#LINES[@]}
+            for ((ln=0; ln<total; ln++)); do
+                if (( total == 1 )); then
+                    t=0
+                else
+                    t=$(awk -v i=$ln -v tot=$total 'BEGIN{print i/(tot-1)}')
+                fi
+                r=$(awk -v a=$R1 -v b=$R2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                if [[ "$TRUECOLOR" -eq 1 ]]; then
+                    printf '\033[38;2;%d;%d;%dm%s\033[0m\n' "$r" "$g" "$b" "${LINES[ln]}"
+                else
+                    ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                    printf '\033[38;5;%dm%s\033[0m\n' "$ai" "${LINES[ln]}"
+                fi
+            done
+            ;;
+        bottom)
+            total=${#LINES[@]}
+            for ((ln=0; ln<total; ln++)); do
+                idx=$((total - 1 - ln))
+                if (( total == 1 )); then
+                    t=0
+                else
+                    t=$(awk -v i=$idx -v tot=$total 'BEGIN{print i/(tot-1)}')
+                fi
+                r=$(awk -v a=$R1 -v b=$R2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                if [[ "$TRUECOLOR" -eq 1 ]]; then
+                    printf '\033[38;2;%d;%d;%dm%s\033[0m\n' "$r" "$g" "$b" "${LINES[ln]}"
+                else
+                    ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                    printf '\033[38;5;%dm%s\033[0m\n' "$ai" "${LINES[ln]}"
+                fi
+            done
+            ;;
+    esac
+else
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ -z "$line" ]]; then
+            continue
+        fi
+        printf "%b%s%b\n" "$COLOR_START" "$line" "$COLOR_END"
+    done
+fi

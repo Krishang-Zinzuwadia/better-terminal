@@ -1,0 +1,33 @@
+## Ignore user-local installs and virtual environments
+/.venv
+venv/
+__pycache__/
+.pytest_cache/
+/.mypy_cache
+
+# Local user installs (do not ignore repo's bin/ or lib/)
+~/.local/
+~/.local/bin/
+~/.local/lib/
+
+# Editor files
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Backup files
+*.bak
+*.tmp
+
+# Logs
+*.log
+
+# Test and build artifacts
+/test-results/
+/.cache/
+/.coverage
+
+# Ignore system-wide bash completion install location (not in repo)
+/etc/bash_completion.d/
