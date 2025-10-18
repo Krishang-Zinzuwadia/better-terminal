@@ -29,5 +29,4 @@ test:
 
 clean:
 	@echo "Cleaning up..."
-	@rm -f bin/better-terminal
 	@echo "Clean complete."
