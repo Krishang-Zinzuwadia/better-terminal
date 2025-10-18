@@ -163,23 +163,32 @@ if [[ -n "$GRADIENT" ]]; then
         left)
             for line in "${LINES[@]}"; do
                 if [[ "$UNIT" == "word" ]]; then
-                    awk -v R1="$R1" -v G1="$G1v" -v B1="$B1" -v R2="$R2" -v G2="$G2v" -v B2="$B2" -v TC="${TRUECOLOR}" -v DIR="left" \
-                        'BEGIN{ OFS="" } {
-                        line=$0; len=length(line);
-                        i=1;
-                        while(i<=len){
-                            c=substr(line,i,1);
-                            if(c ~ /[[:space:]]/){ printf "%s", c; i++; continue }
-                            start=i; while(i<=len && substr(line,i,1) !~ /[[:space:]]/) i++; end=i-1;
-                            for(k=start; k<=end; k++){
-                                if(len==1) t=0; else t=(k-1)/(len-1);
-                                r=int(R1 + (R2-R1)*t); g=int(G1 + (G2-G1)*t); b=int(B1 + (B2-B1)*t);
-                                ch=substr(line,k,1);
-                                if(TC==1){ printf "\033[38;2;%d;%d;%dm%s\033[0m", r,g,b,ch }
-                                else { rr=int(r/51); gg=int(g/51); bb=int(b/51); code=16+36*rr+6*gg+bb; printf "\033[38;5;%dm%s\033[0m", code, ch }
-                            }
-                        }
-                        print "" }' <<< "$line"
+                    read -r -a words <<< "$line"
+                    n=${#words[@]}
+                    if (( n == 0 )); then
+                        echo
+                        continue
+                    fi
+                    for ((i=0;i<n;i++)); do
+                        if (( n == 1 )); then
+                            t=0
+                        else
+                            t=$(awk -v i=$i -v n=$n 'BEGIN{print i/(n-1)}')
+                        fi
+                        r=$(awk -v a=$R1 -v b=$R2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
+                        if [[ "$TRUECOLOR" -eq 1 ]]; then
+                            printf '\033[38;2;%d;%d;%dm%s\033[0m' "$r" "$g" "$b" "${words[i]}"
+                        else
+                            ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                            printf '\033[38;5;%dm%s\033[0m' "$ai" "${words[i]}"
+                        fi
+                        if (( i < n-1 )); then
+                            printf ' '
+                        fi
+                    done
+                    echo
                 else
                     len=${#line}
                     for ((i=0;i<len;i++)); do
@@ -278,10 +287,10 @@ if [[ -n "$GRADIENT" ]]; then
                 g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
                 b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
                 if [[ "$TRUECOLOR" -eq 1 ]]; then
-                    printf '\033[38;2;%d;%d;%dm%s\033[0m\n' "$r" "$g" "$b" "${LINES[ln]}"
+                    printf '\033[38;2;%d;%d;%dm%s\033[0m\n' "$r" "$g" "$b" "${LINES[idx]}"
                 else
                     ai=$(rgb_to_ansi256 "$r" "$g" "$b")
-                    printf '\033[38;5;%dm%s\033[0m\n' "$ai" "${LINES[ln]}"
+                    printf '\033[38;5;%dm%s\033[0m\n' "$ai" "${LINES[idx]}"
                 fi
             done
             ;;

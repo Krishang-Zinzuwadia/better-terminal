@@ -29,5 +29,30 @@ __pycache__/
 /.cache/
 /.coverage
 
+# Bats test artifacts (optional)
+tests/.cache/
+tests/output/
+
+# Lint / tooling outputs
+shellcheck-report.*
+.shellcheck/
+coverage.xml
+junit-*.xml
+
+# Node.js (if added later)
+node_modules/
+
+# GitHub Actions and CI caches
+.github/*-cache/
+.github/actions/cache/
+
+# Local install stubs (avoid committing user installs)
+.local-bin/
+.local-lib/
+
 # Ignore system-wide bash completion install location (not in repo)
 /etc/bash_completion.d/
+
+test.txt
+
+

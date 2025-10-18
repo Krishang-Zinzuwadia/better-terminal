@@ -83,3 +83,97 @@ License
 
 This project is licensed under the MIT License — see the `LICENSE` file for details.
 ```
+
+## Options & examples
+
+The script accepts a few flags and positional color arguments. Typical usage is via a pipe:
+
+```bash
+# basic: color stdin with a hex color
+echo "Hello" | better-terminal '#FF5733'
+
+# or without the leading '#'
+echo "Hello" | better-terminal FF5733
+
+# explicit flag form
+echo "Hello" | better-terminal -c '#FF5733'
+```
+
+Options
+- -t, --truecolor: force truecolor (24-bit) output. If omitted the tool will prefer ANSI/256 or SGR codes when appropriate.
+- -c <hex>: specify a hex color via option instead of positional argument.
+- --gradient <color1> <color2>: enable a gradient between two colors. Colors may be 3/6-digit hex, or numeric SGR/256 values.
+- --direction <left|right|top|bottom>: gradient direction (default: left).
+- -u, --unit <char|word>: in `left`/`right` gradients, whether the gradient is applied per-character or per-word (default: char).
+- -h, --help: print a short usage message.
+
+Gradient examples
+
+```bash
+# left-to-right per-character gradient (default unit)
+cat art.txt | better-terminal --gradient '#ff0000' '#0000ff' --direction left
+
+# right-to-left per-word gradient
+cat art.txt | better-terminal --gradient '#ff0000' '#0000ff' --direction right --unit word
+
+# vertical gradient (top->bottom)
+cat art.txt | better-terminal --gradient '#ff0000' '#0000ff' --direction top
+
+# bottom->top
+cat art.txt | better-terminal --gradient '#ff0000' '#0000ff' --direction bottom
+```
+
+Notes on accepted color formats
+- 6-digit hex: `#RRGGBB` or `RRGGBB`.
+- 3-digit hex shorthand: `#RGB` or `RGB` (expanded internally to `RRGGBB`).
+- Numeric values: standard SGR codes (30-37, 90-97) or ANSI/256 indexes (0-255) are supported; gradients accept numeric colors too.
+
+Behavior details
+- By default the tool skips blank lines (they are not printed). If you want blank-line preservation that's a small behavior change we can add on request.
+- When `--truecolor` is used the script emits 24-bit `ESC[38;2;R;G;Bm` sequences. Without `--truecolor`, 256-color or SGR fallbacks are used when numeric or when the hex is mapped to the closest ANSI/256 index.
+- `bin/better-terminal` searches for `lib/color.sh` in these locations (in order): `lib/` relative to the repo, `~/.local/lib/better-terminal`, `/usr/local/lib/better-terminal`.
+
+Installation (updated)
+
+Per-user (no sudo required):
+
+```bash
+mkdir -p ~/.local/bin
+install -Dm755 bin/better-terminal ~/.local/bin/better-terminal
+mkdir -p ~/.local/lib/better-terminal
+install -Dm644 lib/color.sh ~/.local/lib/better-terminal/color.sh
+# ensure ~/.local/bin is on your PATH
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+System-wide (requires sudo):
+
+```bash
+sudo make install
+```
+
+The `make install` target installs the binary to `/usr/local/bin/better-terminal`, the helper library to `/usr/local/lib/better-terminal/color.sh`, and (if present) the bash completion to `/etc/bash_completion.d/better-terminal`.
+
+Testing
+
+If you add Bats tests under `tests/*.bats` you can run them with:
+
+```bash
+# ensure bats-core is available
+make test
+```
+
+If `bats` is not installed or no tests exist the `make test` target will print a descriptive message and exit cleanly.
+
+Changelog (recent)
+- 2025-10-18: Fixed gradient `--unit word` handling for `left` direction so per-word gradients match `right` behavior.
+- 2025-10-18: Fixed `bottom` direction to map colors to the correct (reversed) lines when printing.
+- 2025-10-18: `Makefile install` updated to install `lib/color.sh` and bash completion (if present).
+
+Contributing
+
+Bug reports and pull requests welcome. If you change behavior (for example, preserve blank lines or add additional color formats), please add or update tests in `tests/*.bats` accordingly.
+
+License
+
+This project is licensed under the MIT License — see the `LICENSE` file for details.
