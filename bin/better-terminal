@@ -266,11 +266,38 @@ if [[ -n "$GRADIENT" ]]; then
                 r=$(awk -v a=$R1 -v b=$R2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
                 g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
                 b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
-                if [[ "$TRUECOLOR" -eq 1 ]]; then
-                    printf '\033[38;2;%d;%d;%dm%s\033[0m\n' "$r" "$g" "$b" "${LINES[ln]}"
+                
+                line="${LINES[ln]}"
+                if [[ "$UNIT" == "word" ]]; then
+                    read -r -a words <<< "$line"
+                    n=${#words[@]}
+                    if (( n == 0 )); then
+                        echo
+                        continue
+                    fi
+                    for ((i=0;i<n;i++)); do
+                        if [[ "$TRUECOLOR" -eq 1 ]]; then
+                            printf '\033[38;2;%d;%d;%dm%s\033[0m' "$r" "$g" "$b" "${words[i]}"
+                        else
+                            ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                            printf '\033[38;5;%dm%s\033[0m' "$ai" "${words[i]}"
+                        fi
+                        if (( i < n-1 )); then
+                            printf ' '
+                        fi
+                    done
+                    echo
                 else
-                    ai=$(rgb_to_ansi256 "$r" "$g" "$b")
-                    printf '\033[38;5;%dm%s\033[0m\n' "$ai" "${LINES[ln]}"
+                    len=${#line}
+                    for ((i=0;i<len;i++)); do
+                        if [[ "$TRUECOLOR" -eq 1 ]]; then
+                            printf '\033[38;2;%d;%d;%dm%s\033[0m' "$r" "$g" "$b" "${line:i:1}"
+                        else
+                            ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                            printf '\033[38;5;%dm%s\033[0m' "$ai" "${line:i:1}"
+                        fi
+                    done
+                    echo
                 fi
             done
             ;;
@@ -286,11 +313,38 @@ if [[ -n "$GRADIENT" ]]; then
                 r=$(awk -v a=$R1 -v b=$R2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
                 g=$(awk -v a=$G1v -v b=$G2v -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
                 b=$(awk -v a=$B1 -v b=$B2 -v t=$t 'BEGIN{printf("%d", a + (b-a)*t)}')
-                if [[ "$TRUECOLOR" -eq 1 ]]; then
-                    printf '\033[38;2;%d;%d;%dm%s\033[0m\n' "$r" "$g" "$b" "${LINES[idx]}"
+                
+                line="${LINES[idx]}"
+                if [[ "$UNIT" == "word" ]]; then
+                    read -r -a words <<< "$line"
+                    n=${#words[@]}
+                    if (( n == 0 )); then
+                        echo
+                        continue
+                    fi
+                    for ((i=0;i<n;i++)); do
+                        if [[ "$TRUECOLOR" -eq 1 ]]; then
+                            printf '\033[38;2;%d;%d;%dm%s\033[0m' "$r" "$g" "$b" "${words[i]}"
+                        else
+                            ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                            printf '\033[38;5;%dm%s\033[0m' "$ai" "${words[i]}"
+                        fi
+                        if (( i < n-1 )); then
+                            printf ' '
+                        fi
+                    done
+                    echo
                 else
-                    ai=$(rgb_to_ansi256 "$r" "$g" "$b")
-                    printf '\033[38;5;%dm%s\033[0m\n' "$ai" "${LINES[idx]}"
+                    len=${#line}
+                    for ((i=0;i<len;i++)); do
+                        if [[ "$TRUECOLOR" -eq 1 ]]; then
+                            printf '\033[38;2;%d;%d;%dm%s\033[0m' "$r" "$g" "$b" "${line:i:1}"
+                        else
+                            ai=$(rgb_to_ansi256 "$r" "$g" "$b")
+                            printf '\033[38;5;%dm%s\033[0m' "$ai" "${line:i:1}"
+                        fi
+                    done
+                    echo
                 fi
             done
             ;;
